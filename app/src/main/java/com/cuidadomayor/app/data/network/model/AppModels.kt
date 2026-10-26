@@ -23,7 +23,16 @@ data class BarthelRequest(
 data class BarthelResponse(
     val puntaje: Int,
     val apto: Boolean,
-    @SerialName("puntaje_minimo") val puntajeMinimo: Int
+    @SerialName("puntaje_minimo") val puntajeMinimo: Int? = null
+)
+
+@Serializable
+data class BarthelSimpleResponse(
+    val id: String? = null,
+    val puntaje: Int? = null,
+    val apto: Boolean? = null,
+    val tipo: String? = null,
+    @SerialName("realizada_en") val realizadaEn: String? = null
 )
 
 @Serializable
@@ -80,7 +89,6 @@ data class AdultoMayorRequest(
     @SerialName("tipo_documento") val tipoDocumento: String,
     @SerialName("numero_documento") val numeroDocumento: String,
     @SerialName("fecha_nacimiento") val fechaNacimiento: String,
-    val edad: Int? = null,
     val genero: String,
     val telefono: String,
     val direccion: String,
@@ -118,11 +126,12 @@ data class AdultoMayorDetalleResponse(
     @SerialName("tiene_deterioro_cognitivo") val tieneDeterioroCognitivo: Boolean,
     @SerialName("preferencia_genero_acomp") val preferenciaGeneroAcomp: String,
     @SerialName("temas_a_evitar") val temasAEvitar: String? = null,
-    @SerialName("intereses_ids") val interesesIds: List<Int>,
+    // Opcionalmente podemos recibir la lista de intereses parseada o ignorarla
     @SerialName("contactos_emergencia") val contactosEmergencia: List<ContactoEmergenciaData>,
     @SerialName("ficha_cuidado") val fichaCuidado: FichaCuidadoData,
     val consentimiento: ConsentimientoData,
-    val barthel: BarthelRequest
+    // AQUI ESTA LA MAGIA: El servidor nos devuelve un resumen del test, NO las 10 preguntas
+    val barthel: BarthelSimpleResponse? = null
 )
 
 @Serializable
@@ -133,7 +142,7 @@ data class AdultoMayorResumen(
     val edad: Int,
     val estado: String,
     @SerialName("consentimiento_vigente") val consentimientoVigente: Boolean,
-    @SerialName("puntaje_barthel") val puntajeBarthel: Int
+    @SerialName("puntaje_barthel") val puntajeBarthel: Int? = null
 )
 
 // --- Servicios ---
@@ -194,7 +203,6 @@ data class CrearServicioRequest(
 data class ServicioDetalleResponse(
     val id: String,
     val estado: String,
-    // Atributos base mínimos devueltos por el backend, extendibles luego
     val notas: String? = null
 )
 
