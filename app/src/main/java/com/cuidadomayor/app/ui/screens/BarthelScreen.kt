@@ -1,5 +1,6 @@
 package com.cuidadomayor.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,23 +20,54 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cuidadomayor.app.data.model.BarthelOption
-import com.cuidadomayor.app.data.model.BarthelQuestion
+import com.cuidadomayor.app.data.network.model.BarthelRequest
+import com.cuidadomayor.app.ui.home.AdultoMayorViewModel
+import com.cuidadomayor.app.ui.home.BarthelUiState
 import com.cuidadomayor.app.ui.theme.*
 
+data class BarthelOptionData(val label: String, val points: Int)
+data class BarthelQuestionData(val id: String, val title: String, val options: List<BarthelOptionData>)
+
 @Composable
-fun BarthelScreen(onBack: () -> Unit) {
-    var consentAccepted by remember { mutableStateOf(true) }
-    var q1Points by remember { mutableIntStateOf(10) }
-    var q2Points by remember { mutableIntStateOf(5) }
-    var q3Points by remember { mutableIntStateOf(10) }
-    var q4Points by remember { mutableIntStateOf(15) }
-    var q5Points by remember { mutableIntStateOf(5) }
+fun BarthelScreen(
+    viewModel: AdultoMayorViewModel,
+    onBack: () -> Unit,
+    onApto: () -> Unit
+) {
+    var consentAccepted by remember { mutableStateOf(false) }
 
-    val baseline = 30
-    val totalScore = baseline + q1Points + q2Points + q3Points + q4Points + q5Points
+    var comer by remember { mutableStateOf<Int?>(null) }
+    var trasladarse by remember { mutableStateOf<Int?>(null) }
+    var aseoPersonal by remember { mutableStateOf<Int?>(null) }
+    var usoRetrete by remember { mutableStateOf<Int?>(null) }
+    var banarse by remember { mutableStateOf<Int?>(null) }
+    var desplazarse by remember { mutableStateOf<Int?>(null) }
+    var subirEscaleras by remember { mutableStateOf<Int?>(null) }
+    var vestirse by remember { mutableStateOf<Int?>(null) }
+    var controlHeces by remember { mutableStateOf<Int?>(null) }
+    var controlOrina by remember { mutableStateOf<Int?>(null) }
 
+    val todasContestadas = comer != null && trasladarse != null && aseoPersonal != null && 
+                           usoRetrete != null && banarse != null && desplazarse != null && 
+                           subirEscaleras != null && vestirse != null && controlHeces != null && controlOrina != null
+
+    val isButtonEnabled = consentAccepted && todasContestadas
+
+    val uiState by viewModel.barthelState.collectInLaunchedEffect()
     val scrollState = rememberScrollState()
+
+    // Solo activamos la redirección 1 VEZ y de forma explícita al aprobar el servidor
+    LaunchedEffect(uiState) {
+        if (uiState is BarthelUiState.Success) {
+            val response = (uiState as BarthelUiState.Success).response
+            if (response.apto) {
+                onApto()
+            }
+        }
+    }
+
+    // Calcular el total solo para dar un feeling de progreso visual
+    val totalProgress = listOfNotNull(comer, trasladarse, aseoPersonal, usoRetrete, banarse, desplazarse, subirEscaleras, vestirse, controlHeces, controlOrina).size
 
     Column(
         modifier = Modifier
@@ -45,274 +77,170 @@ fun BarthelScreen(onBack: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Back Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 16.dp)
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = PrimaryGreen)
             }
             Column {
-                Text(
-                    text = "Paso 1 de 2: Autonomía Funcional",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryGreen
-                )
-                Text(
-                    text = "Valoración Barthel Pre-registro",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = OnSurfaceText
-                )
+                Text("Paso 1 de 2: Autonomía Funcional", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryGreen)
+                Text("Test de Barthel", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = OnSurfaceText)
             }
         }
 
-        // Informed Consent Card
+        // Progress indicator
+        LinearProgressIndicator(
+            progress = { totalProgress / 10f },
+            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+            color = PrimaryGreen,
+            trackColor = SurfaceContainerHigh
+        )
+
         Card(
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest),
+            colors = CardDefaults.cardColors(containerColor = if (consentAccepted) PrimaryGreen.copy(alpha = 0.05f) else SurfaceContainerLowest),
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, PrimaryGreen.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+            modifier = Modifier.fillMaxWidth().border(1.dp, if (consentAccepted) PrimaryGreen else PrimaryGreen.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(PrimaryGreen.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = PrimaryGreen)
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { consentAccepted = !consentAccepted }.padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = PrimaryGreen)
                     Column {
                         Text("Consentimiento Informado", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(
-                            "La información ingresada es confidencial y se utilizará para estructurar un plan de asistencia personalizada.",
-                            fontSize = 11.sp,
-                            color = OnSurfaceVariant
-                        )
+                        Text("Tratamiento confidencial de datos de salud", fontSize = 11.sp, color = OnSurfaceVariant)
                     }
                 }
+                Switch(checked = consentAccepted, onCheckedChange = { consentAccepted = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryGreen))
+            }
+        }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SurfaceContainerLow)
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Consiento la evaluación funcional",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = OnSurfaceText
-                    )
-                    Switch(
-                        checked = consentAccepted,
-                        onCheckedChange = { consentAccepted = it }
-                    )
+        if (!consentAccepted) {
+            Text("Debes aceptar el consentimiento médico para habilitar el botón y enviar las respuestas.", color = EmergencyRed, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        }
+
+        val questions = listOf(
+            BarthelQuestionData("comer", "1. Comer", listOf(BarthelOptionData("Totalmente independiente", 10), BarthelOptionData("Necesita ayuda", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("trasladarse", "2. Trasladarse (Silla/Cama)", listOf(BarthelOptionData("Independiente", 15), BarthelOptionData("Mínima ayuda", 10), BarthelOptionData("Gran ayuda", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("aseo", "3. Aseo personal", listOf(BarthelOptionData("Independiente", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("retrete", "4. Uso del retrete", listOf(BarthelOptionData("Independiente", 10), BarthelOptionData("Necesita ayuda", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("banarse", "5. Bañarse/Ducharse", listOf(BarthelOptionData("Independiente", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("desplazarse", "6. Desplazarse (Deambular)", listOf(BarthelOptionData("Independiente", 15), BarthelOptionData("Necesita ayuda", 10), BarthelOptionData("Silla de ruedas", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("escaleras", "7. Subir/bajar escaleras", listOf(BarthelOptionData("Independiente", 10), BarthelOptionData("Necesita ayuda", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("vestirse", "8. Vestirse/Desvestirse", listOf(BarthelOptionData("Independiente", 10), BarthelOptionData("Necesita ayuda", 5), BarthelOptionData("Dependiente", 0))),
+            BarthelQuestionData("heces", "9. Control de heces", listOf(BarthelOptionData("Continente", 10), BarthelOptionData("Accidente ocasional", 5), BarthelOptionData("Incontinente", 0))),
+            BarthelQuestionData("orina", "10. Control de orina", listOf(BarthelOptionData("Continente", 10), BarthelOptionData("Accidente ocasional", 5), BarthelOptionData("Incontinente", 0)))
+        )
+
+        questions.forEach { q ->
+            val currentValue = when (q.id) {
+                "comer" -> comer; "trasladarse" -> trasladarse; "aseo" -> aseoPersonal; "retrete" -> usoRetrete; "banarse" -> banarse
+                "desplazarse" -> desplazarse; "escaleras" -> subirEscaleras; "vestirse" -> vestirse; "heces" -> controlHeces; else -> controlOrina
+            }
+
+            QuestionCardUi(
+                title = q.title,
+                options = q.options,
+                selectedValue = currentValue,
+                onSelect = {
+                    when (q.id) {
+                        "comer" -> comer = it; "trasladarse" -> trasladarse = it; "aseo" -> aseoPersonal = it; "retrete" -> usoRetrete = it; "banarse" -> banarse = it
+                        "desplazarse" -> desplazarse = it; "escaleras" -> subirEscaleras = it; "vestirse" -> vestirse = it; "heces" -> controlHeces = it; else -> controlOrina = it
+                    }
+                }
+            )
+        }
+
+        AnimatedVisibility(visible = uiState is BarthelUiState.Error) {
+            if (uiState is BarthelUiState.Error) {
+                val errorMsg = (uiState as BarthelUiState.Error).message
+                Card(colors = CardDefaults.cardColors(containerColor = EmergencyContainer), modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Error, contentDescription = null, tint = EmergencyRed)
+                        Text(errorMsg, color = EmergencyRed, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
 
-        // Questions
-        QuestionCard(
-            number = 1,
-            title = "Alimentación",
-            selectedPoints = q1Points,
-            options = listOf(
-                BarthelOption("Totalmente independiente", "Come por sí solo en tiempo razonable", 10),
-                BarthelOption("Necesita ayuda", "Para cortar carne o untar pan", 5)
-            ),
-            onSelect = { q1Points = it }
-        )
+        // Si es exitoso pero NO apto (menor a 61), mostramos la advertencia del backend directamente.
+        AnimatedVisibility(visible = uiState is BarthelUiState.Success && !(uiState as BarthelUiState.Success).response.apto) {
+            Card(colors = CardDefaults.cardColors(containerColor = EmergencyContainer), modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = EmergencyRed)
+                    Text("Puntaje bajo. Por ahora, el servicio es para adultos con Barthel de 61 o superior.", color = EmergencyRed, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
-        QuestionCard(
-            number = 2,
-            title = "Lavado y aseo personal",
-            selectedPoints = q2Points,
-            options = listOf(
-                BarthelOption("Totalmente independiente", "Entra, se baña y se seca solo", 10),
-                BarthelOption("Requiere ayuda leve", "Supervisión o apoyo en zonas difíciles", 5)
+        Button(
+            onClick = {
+                if (isButtonEnabled && uiState !is BarthelUiState.Loading) {
+                    val request = BarthelRequest(
+                        comer = comer!!, trasladarse = trasladarse!!, aseoPersonal = aseoPersonal!!, usoRetrete = usoRetrete!!,
+                        banarse = banarse!!, desplazarse = desplazarse!!, subirEscaleras = subirEscaleras!!, vestirse = vestirse!!,
+                        controlHeces = controlHeces!!, controlOrina = controlOrina!!
+                    )
+                    viewModel.evaluarBarthel(request)
+                }
+            },
+            enabled = isButtonEnabled && uiState !is BarthelUiState.Loading,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = PrimaryGreen,
+                disabledContainerColor = SurfaceContainerHigh,
+                disabledContentColor = OnSurfaceVariant
             ),
-            onSelect = { q2Points = it }
-        )
-
-        QuestionCard(
-            number = 3,
-            title = "Vestirse y desvestirse",
-            selectedPoints = q3Points,
-            options = listOf(
-                BarthelOption("Totalmente independiente", "Se coloca ropa, botones y calzado", 10),
-                BarthelOption("Necesita ayuda parcial", "Apoyo con cordones o cremalleras", 5)
-            ),
-            onSelect = { q3Points = it }
-        )
-
-        QuestionCard(
-            number = 4,
-            title = "Deambulación / Caminata",
-            selectedPoints = q4Points,
-            options = listOf(
-                BarthelOption("Independiente con bastón", "Camina al menos 50 metros sin ayuda", 15),
-                BarthelOption("Silla de ruedas o apoyo", "Requiere empuje continuo o andador", 5)
-            ),
-            onSelect = { q4Points = it }
-        )
-
-        QuestionCard(
-            number = 5,
-            title = "Uso de escaleras",
-            selectedPoints = q5Points,
-            options = listOf(
-                BarthelOption("Independiente", "Sube y baja sin supervisión", 10),
-                BarthelOption("Necesita supervisión", "Requiere compañía o barandilla", 5)
-            ),
-            onSelect = { q5Points = it }
-        )
-
-        // Realtime Score Result Card
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF4EF)),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(2.dp, Color(0xFF8ABDA9), RoundedCornerShape(16.dp))
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(54.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("RESULTADO EN TIEMPO REAL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PrimaryGreen)
-                    Surface(
-                        color = PrimaryContainer,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "$totalScore / 100 pts",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.9f))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(PrimaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "$totalScore", color = PrimaryFixed, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    }
-                    Column {
-                        Text(
-                            text = "$totalScore / 100 - Autonomía Leve/Moderada",
-                            fontWeight = FontWeight.Bold,
-                            color = PrimaryGreen,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "Apta para acompañamiento, paseos y estimulación.",
-                            fontSize = 11.sp,
-                            color = OnSurfaceText
-                        )
-                    }
-                }
-
-                Button(
-                    onClick = onBack,
-                    enabled = consentAccepted,
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                ) {
-                    Text("Continuar con el Registro de Cuenta", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
+            if (uiState is BarthelUiState.Loading) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+            } else {
+                Text(
+                    text = if (todasContestadas && consentAccepted) "Evaluar y Continuar" else if (!todasContestadas) "Completa las 10 preguntas" else "Acepta el consentimiento", 
+                    fontWeight = FontWeight.Bold, 
+                    fontSize = 15.sp
+                )
             }
         }
+        
+        Spacer(Modifier.height(100.dp))
     }
 }
 
 @Composable
-fun QuestionCard(
-    number: Int,
-    title: String,
-    selectedPoints: Int,
-    options: List<BarthelOption>,
-    onSelect: (Int) -> Unit
-) {
+fun QuestionCardUi(title: String, options: List<BarthelOptionData>, selectedValue: Int?, onSelect: (Int) -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest),
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().border(1.dp, if (selectedValue == null) SurfaceContainerHigh else PrimaryFixedDim.copy(alpha=0.5f), RoundedCornerShape(16.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(PrimaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("$number", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = OnSurfaceText)
+                if (selectedValue != null) {
+                    Surface(color = PrimaryGreen.copy(alpha=0.1f), shape = RoundedCornerShape(8.dp)) {
+                        Text("+$selectedValue pts", color = PrimaryGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-                Text("+$selectedPoints pts", color = PrimaryGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
             }
-
             options.forEach { option ->
-                val isSelected = selectedPoints == option.points
+                val isSelected = selectedValue == option.points
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) PrimaryGreen else SurfaceContainerHigh,
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, if (isSelected) PrimaryGreen else Color.Transparent, RoundedCornerShape(12.dp))
                         .background(if (isSelected) PrimaryGreen.copy(alpha = 0.05f) else SurfaceBg)
-                        .clickable { onSelect(option.points) }
-                        .padding(12.dp),
+                        .clickable { onSelect(option.points) }.padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(option.label, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        Text(option.description, fontSize = 11.sp, color = OnSurfaceVariant)
-                    }
-                    RadioButton(
-                        selected = isSelected,
-                        onClick = { onSelect(option.points) },
-                        colors = RadioButtonDefaults.colors(selectedColor = PrimaryGreen)
-                    )
+                    Text(option.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 13.sp, color = if (isSelected) PrimaryGreen else OnSurfaceText)
+                    RadioButton(selected = isSelected, onClick = { onSelect(option.points) }, colors = RadioButtonDefaults.colors(selectedColor = PrimaryGreen))
                 }
             }
         }
